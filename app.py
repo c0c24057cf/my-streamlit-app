@@ -7,3 +7,5 @@ st.set_page_config(
     layout="wide"
 )
 
+st.title("My Streamlit App")
+st.write("Streamlitアプリのテストページです。")
