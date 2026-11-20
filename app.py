@@ -8,4 +8,4 @@ st.set_page_config(
 )
 
 st.title("My Streamlit App")
-st.write("Streamlitアプリのテストページです。まんこ")
+st.write("Streamlitアプリのテストページです。")
