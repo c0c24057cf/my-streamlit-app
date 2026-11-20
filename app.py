@@ -1,5 +1,5 @@
 # 九澤担当：条件比較機能 ＋ 検索機能（Streamlit）
-# 実行方法：  streamlit run cond_search_app.py
+# 実行方法：  streamlit run app.py
 # 同じフォルダに Tokyo_20212_20261.csv を置いてください。
 import re
 from pathlib import Path
@@ -16,9 +16,18 @@ WARDS_23 = [
     "北区", "荒川区", "板橋区", "練馬区", "足立区", "葛飾区", "江戸川区",
 ]
 TYPES = ["宅地(土地と建物)", "宅地(土地)"]
+REQUIRED_COLUMNS = [
+    "市区町村名",
+    "取引価格（総額）",
+    "面積（㎡）",
+    "取引時期",
+    "建築年",
+    "今後の利用目的",
+    "種類",
+]
 
 # 区分け（right=False なので「以上〜未満」）
-AREA_BINS = [0, 50, 75, 100, 150, 250, 10000]
+AREA_BINS = [0, 50, 75, 100, 150, 250, float("inf")]
 AREA_LABELS = ["〜50㎡", "50〜75㎡", "75〜100㎡", "100〜150㎡", "150〜250㎡", "250㎡〜"]
 AGE_BINS = [0, 5, 10, 20, 30, 40, 50, 200]
 AGE_LABELS = ["0〜4年", "5〜9年", "10〜19年", "20〜29年", "30〜39年", "40〜49年", "50年〜"]
@@ -27,10 +36,27 @@ AGE_LABELS = ["0〜4年", "5〜9年", "10〜19年", "20〜29年", "30〜39年", 
 # ---------------------------------------------------------------- データ
 @st.cache_data(show_spinner="データを読み込み中...")
 def load_data(path: str) -> pd.DataFrame:
-    df = pd.read_csv(path, encoding="cp932", low_memory=False)
+    try:
+        df = pd.read_csv(path, encoding="cp932", low_memory=False)
+    except (
+        OSError,
+        UnicodeDecodeError,
+        pd.errors.EmptyDataError,
+        pd.errors.ParserError,
+    ) as exc:
+        raise ValueError(
+            "CSVを読み込めませんでした。ファイルの場所、文字コード（CP932）、"
+            "CSVの形式を確認してください。"
+        ) from exc
+
+    missing = [column for column in REQUIRED_COLUMNS if column not in df.columns]
+    if missing:
+        raise ValueError(f"CSVに必要な列がありません: {', '.join(missing)}")
 
     # 23区だけにする
     df = df[df["市区町村名"].isin(WARDS_23)].copy()
+    if df.empty:
+        raise ValueError("CSVに東京23区の取引データがありません。")
 
     # 数値に直す（「2000㎡以上」などは NaN になる）
     df["価格_万円"] = pd.to_numeric(df["取引価格（総額）"], errors="coerce") / 10000
@@ -71,7 +97,8 @@ def summarize(df: pd.DataFrame, col: str, bins, labels) -> pd.DataFrame:
 
 def spearman(df: pd.DataFrame, col: str) -> float:
     d = df.dropna(subset=[col])
-    return d[col].rank().corr(d["価格_万円"].rank())
+    correlation = d[col].rank().corr(d["価格_万円"].rank())
+    return correlation
 
 
 def tab_compare(data: pd.DataFrame):
@@ -100,8 +127,15 @@ def tab_compare(data: pd.DataFrame):
         st.warning("該当するデータがありません。")
         return
 
-    st.metric(f"{item}と価格の相関（スピアマン）", f"{spearman(df, item):.2f}",
-              help="+1に近いほど「大きいほど高い」、−1に近いほど「大きいほど安い」、0は関係が弱い")
+    correlation = spearman(df, item)
+    if pd.isna(correlation):
+        st.info("データのばらつきが少ないため、相関を計算できません。")
+    else:
+        st.metric(
+            f"{item}と価格の相関（スピアマン）",
+            f"{correlation:.2f}",
+            help="+1に近いほど「大きいほど高い」、−1に近いほど「大きいほど安い」、0は関係が弱い",
+        )
     st.write(f"**{item}の区分ごとの価格の中央値（万円）**")
     st.bar_chart(table["中央値（万円）"])
     st.dataframe(table)
@@ -165,10 +199,18 @@ def main():
     st.title("東京23区 不動産取引価格分析")
     st.caption("出典：国土交通省 不動産情報ライブラリ（過去の取引価格で、売り出し中の物件ではありません）")
 
-    if not Path(CSV_PATH).exists():
+    csv_path = Path(__file__).resolve().parent / CSV_PATH
+    if not csv_path.exists():
         st.error(f"CSVファイル「{CSV_PATH}」が見つかりません。このファイルと同じフォルダに置いてください。")
         st.stop()
-    data = load_data(CSV_PATH)
+    try:
+        data = load_data(str(csv_path))
+    except ValueError as exc:
+        st.error(str(exc))
+        st.stop()
+    if data.empty:
+        st.error("利用できる取引データがありません。")
+        st.stop()
 
     tab1, tab2 = st.tabs(["条件比較", "検索"])
     with tab1:
