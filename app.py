@@ -137,7 +137,8 @@ def tab_compare(data: pd.DataFrame):
             help="+1に近いほど「大きいほど高い」、−1に近いほど「大きいほど安い」、0は関係が弱い",
         )
     st.write(f"**{item}の区分ごとの価格の中央値（万円）**")
-    st.bar_chart(table["中央値（万円）"])
+    chart_table = table[table["件数"] > 0]
+    st.bar_chart(chart_table["中央値（万円）"])
     st.dataframe(table)
 
     if (table["件数"] < MIN_N).any():
