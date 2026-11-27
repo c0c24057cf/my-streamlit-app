@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -38,13 +39,7 @@ df = df[
     (df["取引価格（総額）"] <= q3 + 1.5 * iqr)
 ].copy()
 
-st.subheader("データ概要")
-st.write("データ件数:", len(df))
-st.dataframe(df.head(), use_container_width=True)
-
-st.divider()
-
-st.subheader("区ごとの価格比較")
+st.subheader("区ごとの価格比較(2026年)")
 
 ward_avg = (
     df.groupby("市区町村名")["取引価格（総額）"]
