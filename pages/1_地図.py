@@ -72,6 +72,8 @@ deck = pdk.Deck(
 
 st.pydeck_chart(deck, use_container_width=True)
 
+
+
 # 価格ランキング
 st.subheader("区ごとの平均取引価格ランキング")
 
